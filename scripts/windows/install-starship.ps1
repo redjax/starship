@@ -73,6 +73,17 @@ Write-Verbose "Starship config path: $($StarshipTomlFile) [exists: $( Test-Path 
 # Functions #
 #############
 
+Function Test-IsAdministrator {
+    <#
+    .SYNOPSIS
+    Check if the current user is an administrator.
+    #>
+
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+    $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 function Test-CommandExists {
     <#
     .SYNOPSIS
@@ -95,6 +106,49 @@ function Test-CommandExists {
     Write-Verbose "Command '$Command' exists: $CmdExists."
 
     return $CmdExists
+}
+
+function Invoke-ElevatedCommand {
+    param (
+        [Parameter(Mandatory = $true)]
+        [ScriptBlock]$CodeBlock,
+        
+        [Parameter()]
+        [Hashtable]$Arguments
+    )
+
+    # Serialize arguments for passing to the elevated process
+    $SerializedArgs = $Arguments | ConvertTo-Json -Depth 10
+
+    # Prepare the script content to run as admin
+    $TempScriptPath = [System.IO.Path]::GetTempFileName() + ".ps1"
+    $ScriptContent = @"
+    Param (
+        [string]\$SerializedArgs
+    )
+    # Deserialize arguments
+    \$ArgsHash = \$SerializedArgs | ConvertFrom-Json
+    # Run the code block
+    & {
+        $CodeBlock
+    } @ArgsHash
+"@
+
+    # Write the temporary script
+    Set-Content -Path $TempScriptPath -Value $ScriptContent
+
+    # Run the script as an administrator
+    $ArgumentsList = "-NoProfile -ExecutionPolicy Bypass -File `"$TempScriptPath`" -SerializedArgs '$SerializedArgs'"
+    $process = Start-Process powershell.exe -ArgumentList $ArgumentsList -Verb RunAs -PassThru -Wait
+
+    # Capture the exit code
+    $exitCode = $process.ExitCode
+
+    # Clean up
+    Remove-Item -Path $TempScriptPath
+
+    # Return the exit code
+    return $exitCode
 }
 
 function Install-StarshipScoop {
@@ -243,18 +297,11 @@ function Start-StarshipInstall {
     }
 
     Write-Host "Installing Starship with $PkgManager..." -ForegroundColor Cyan
-    If ( $PkgManager -eq "scoop" ) {
-        Install-StarshipScoop
-    }
-    elseif ( $PkgManager -eq "choco" ) {
-        Install-StarshipChocolatey
-    }
-    elseif ( $PkgManager -eq "winget" ) {
-        Install-StarshipWinget
-    }
-    else {
-        Write-Error "Unknown package manager: $PkgManager"
-        exit 1
+    switch ($PkgInstaller) {
+        "scoop" { Install-StarshipScoop }
+        "choco" { Install-StarshipChocolatey }
+        "winget" { Install-StarshipWinget }
+        default { Write-Error "Unknown package manager: $PkgInstaller" ; exit 1 }
     }
 }
 
@@ -270,7 +317,7 @@ Starship config exists: $($StarshipConfigExists) $( If ( $StarshipConfigExists )
 
 "@ -ForegroundColor Magenta
 
-    return
+        return
     }
 
     If ( $StarshipConfigExists ) {
@@ -279,7 +326,8 @@ Starship config exists: $($StarshipConfigExists) $( If ( $StarshipConfigExists )
         try {
             Move-Item -Path $StarshipTomlFile -Destination $BackupPath -Force
 
-        } catch {
+        }
+        catch {
             Write-Error "Failed to backup existing Starship config. Details: $($_.Exception.Message)"
             exit 1
         }
@@ -372,6 +420,16 @@ Found Starship init line in `$PROFILE: $InitLineExists $( If ( -Not $InitLineExi
         return
     }
 
+    If (-Not (Test-Path -Path $PROFILE)) {
+        Write-Warning "PowerShell profile does not exist. Creating a new profile..."
+        try {
+            New-Item -Path $PROFILE -ItemType File -Force
+        } catch {
+            Write-Error "Failed to create a new Powershell profile. Details: $($_.Exception.Message)"
+            exit 1
+        }
+    }
+
     If (-Not $InitLineExists) {
         Write-Host "`nAdding Starship initialization to the PowerShell profile..." -ForegroundColor Cyan
         try {
@@ -401,6 +459,84 @@ function Select-StarshipProfile {
     return $StarshipProfilePath
 }
 
+function New-StarshipProfileSymlink {
+    Param(
+        [Parameter(Mandatory = $true)]
+        [string]$StarshipProfile
+    )
+
+    If ( $DryRun ) {
+        Write-Host "[DryRun] Would have created a symlink to Starship profile: $StarshipProfile" -ForegroundColor Magenta
+        return
+    }
+    else {
+        ## Check if the starship config already exists
+        If ( Test-Path $StarshipTomlFile ) {
+            ## Get details about the existing file
+            $Item = Get-Item $StarshipTomlFile
+
+            ## Check if the path is a junction/symlink
+            If ($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+                Write-Host "Path is already a junction or symlink: $StarshipTomlFile"
+                return
+            }
+
+            ## Path is a regular file
+            Write-Warning "Path already exists: $StarshipTomlFile. Moving to $StarshipTomlFile.bak"
+            If (Test-Path "$StarshipTomlFile.bak") {
+                Write-Warning "$StarshipTomlFile.bak already exists. Overwriting backup."
+                Remove-Item "$StarshipTomlFile.bak" -Force
+            }
+
+            try {
+                Move-Item $StarshipTomlFile "$StarshipTomlFile.bak"
+            }
+            catch {
+                Write-Error "Error moving $StarshipTomlFile to $StarshipTomlFile.bak. Details: $($_.Exception.Message)"
+                exit 1
+            }
+        }
+
+        ## Set expression to symlink config
+        $SymlinkExpression = {
+            New-Item -ItemType SymbolicLink -Path $StarshipTomlFile -Target $StarshipProfile
+        }
+
+        Write-Host "Creating symlink from $StarshipTomlFile -> $StarshipProfile" -ForegroundColor Cyan
+
+        If ( -Not ( Test-IsAdministrator ) ) {
+            Write-Warning "This script needs to run as administrator. Elevating..."
+
+            try {
+                # Call Invoke-ElevatedCommand and capture the exit code
+                $exitCode = Invoke-ElevatedCommand -CodeBlock $SymlinkExpression
+
+                if ($exitCode -ne 0) {
+                    Write-Error "Failed to create symbolic link. Exit code: $exitCode"
+                    return
+                }
+            }
+            catch {
+                Write-Error "Failed to create symbolic link. Details: $($_.Exception.Message)"
+                return
+            }
+        }
+        else {
+            Write-Debug "Script running as administrator"
+
+            ## Create the symbolic link
+            try {
+                # Run without elevation since the script is already elevated
+                Invoke-Expression $SymlinkExpression
+                Write-Host "Symlink created: $StarshipTomlFile -> $StarshipProfile" -ForegroundColor Green
+            }
+            catch {
+                Write-Error "Failed to create symbolic link. Details: $($_.Exception.Message)"
+                return
+            }
+        }
+    }
+}
 
 ##############
 # Entrypoint #
@@ -471,12 +607,18 @@ function main {
     ## Add Starship init to Powershell $PROFILE
     Set-StarshipInPSProfile
 
-    ## Backup existing Starship config, if it exists
-    New-StarshipProfileBackup
-
     Write-Host "Selecting Starship profile from configs directory" -ForegroundColor Cyan
     ## Set path to Starship TOML profile
     $StarshipProfile = Select-StarshipProfile -StarshipTomlFile $StarshipTomlFile
+    Write-Host "Selected Starship profile: $StarshipProfile" -ForegroundColor Green
+
+    try {
+        New-StarshipProfileSymlink -StarshipProfile $StarshipProfile
+    }
+    catch {
+        Write-Error "Failed to create symlink to Starship profile. Details: $($_.Exception.Message)"
+        exit 1
+    }
 }
 
 try {
