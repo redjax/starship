@@ -1,0 +1,219 @@
+## Starship shell configuration
+#  https://starship.rs/config
+
+## Get editor completions based on config schema
+"$schema" = "https://starship.rs/config-schema.json"
+
+## Insert blank line between shell prompts
+add_newline = true
+
+## Set the prompt format
+format = "$all"
+
+## Replace the "❯" symbol in the prompt with '➜'
+[character]
+success_symbol = '[➜](bold green)'
+
+## Show command duration
+[cmd_duration]
+min_time = 500
+format = 'completed in [$duration](bold yellow)'
+
+## Directory in prompt
+[directory]
+truncation_length = 8
+truncation_symbol = '.../'
+## Truncate to git root
+truncate_to_repo = true
+format = '[$path]($style)[$read_only]($read_only_style) '
+style = "bold cyan"
+disabled = false
+read_only = "🔒"
+read_only_style = "red"
+repo_root_format = '[$before_root_path]($before_repo_root_style)[$repo_root]($repo_root_style)[$path]($style)[$read_only]($read_only_style) '
+home_symbol = "~"
+use_os_path_sep = true
+
+## Display env var values
+[env_var.USER]
+default = '<unknown user>'
+variable = "USERNAME"
+format = "[$env_value]($style) "
+description = "The current Windows user"
+disabled = true
+
+[env_var.SHELL]
+variable = "SHELL"
+default = "<unknown shell>"
+disabled = true
+
+[env_var.HOSTNAME]
+variable = "COMPUTERNAME"
+default = "<unknown hostname>"
+format = "[$env_value]($style) "
+description = "The current machine's name"
+disabled = true
+
+[git_branch]
+symbol = ""
+format = "on [$symbol$branch(:$remote_branch)]($style) "
+style = "bold purple"
+truncation_length = 6 
+truncation_symbol = "..."
+ignore_branches = ["master", "main"]
+disabled = false
+only_attached = false
+
+[git_commit]
+commit_hash_length = 4
+format = "[($hash$tag)]($style) "
+style = "bold green"
+only_detached = true
+tag_disabled = true
+tag_max_candidates = 0
+tag_symbol = "🏷️ "
+disabled = false
+
+[git_state]
+format = "[($state( $progress_current of $progress_total))]($style) "
+style = "bold yellow"
+cherry_pick = "[🍒 PICKING](bold red)"
+rebase = "REBASING"
+merge = "MERGING"
+revert = "REVERTING"
+bisect = "BISECTING"
+am = "AM"
+am_or_rebase = "AM/REBASE"
+disabled = false
+
+[git_metrics]
+added_style = "bold green"
+deleted_style = "bold red"
+only_nonzero_diffs = true
+format = "([+$added]($added_style) )([-$deleted]($deleted_style) )"
+ignore_submodules = false
+disabled = false
+
+[git_status]
+format = "([[$all_status$ahead_behind]]($style) "
+conflicted = "="
+# ahead = "⇡"
+ahead = "⇡${count}"
+# behind = "⇣"
+behind = "⇣${count}"
+# diverged = "⇕"
+diverged = "⇡${ahead_count}⇣${behind_count}"
+up_to_date = "✓"
+# untracked = "?"
+untracked = "?${count}"
+stashed = "$"
+# modified = "!"
+modified = "!${count}"
+# staged = "[++($count)](green)"
+staged = "+${count}"
+renamed = "»"
+deleted = "🗑"
+typechanged = ""
+style = "bold red"
+ignore_submodules = false
+disabled = false
+
+[hostname]
+ssh_only = false
+ssh_symbol = "🌐 "
+detect_env_vars = ["!TMUX", "SSH_CONNECTION"]
+format = "[$ssh_symbol](bold blue on [$hostname](bold red) "
+style = "bold dimmed green"
+trim_at = "."
+disabled = false
+aliases = {}
+
+## Put prompt on 2 lines with disabled = false
+[line_break]
+disabled = true
+
+[localip]
+ssh_only = true
+format = "[$localipv4]($style)"
+style = "bold yellow"
+disabled = false
+
+[memory_usage]
+## Hide until threshold
+threshold = 75
+format = "ram: $symbol [${ram}/${ram_pct}( | ${swap}/${swap_pct})]($style) "
+symbol = "🐏"
+style = "bold dimmed white"
+disabled = false
+
+[package]
+format = "is [$symbol$version]($style) "
+symbol = "📦 "
+version_format = "v${raw}"
+style = "bold 208"
+display_private = false
+disabled = false
+
+[python]
+format = "via [${symbol}${pyenv_prefix}(${version})(($virtualenv) )]($style)"
+version_format = "v${raw}"
+symbol = "🐍 "
+style = "yellow bold"
+pyenv_version_name = false
+pyenv_prefix = "pyenv"
+python_binary = ["python", "python3", "python2", "py", "py3"]
+detect_extensions = ["py", "ipynb"]
+detect_files = [".python-version", "Pipfile", "__init__.py", "pyproject.toml", "requirements.txt", "setup.py", "tox.ini", "pixi.toml"]
+detect_folders = []
+disabled = false
+
+[azure]
+format = "on [$symbol($username: $subscription)]($style)"
+symbol = "󰠅 "
+style = "blue bold"
+disabled = false
+subscription_aliases = {}
+
+[shell]
+bash_indicator = "bash"
+fish_indicator = "fish"
+zsh_indicator = "zsh"
+powershell_indicator = "ps"
+cmd_indicator = "cmd"
+unknown_indicator = "<unknown shell>"
+format = "[$indicator]($style) "
+style = "white bold"
+disabled = false
+
+[status]
+format = "[$symbol$status]($style)"
+symbol = "❌"
+success_symbol = ""
+not_executable_symbol = "🚫"
+not_found_symbol = "🔍"
+sigint_symbol = "🧱"
+signal_symbol = "⚡"
+style = "bold red"
+recognize_signal_code = true
+map_symbol = false
+pipestatus = false
+pipestatus_separator = "|"
+pipestatus_format = "[$pipestatus] => [$symbol$common_meanings$signal_name$maybe_int]($style)"
+disabled = false
+
+[sudo]
+format = "[as $symbol]($style)"
+symbol = "🧙"
+style = "bold blue"
+allow_windows = false
+disabled = true
+
+[username]
+style_root = "bold red"
+style_user = "bold yellow"
+# detect_env_vars = ["USERNAME", "USER"]
+format = "[$user]($style) "
+show_always = true
+disabled = false
+aliases = {}
+

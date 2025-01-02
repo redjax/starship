@@ -1,0 +1,277 @@
+format = """\
+[╭╴](fg:arrow)\
+$username\
+$directory\
+$time\
+(\
+    $git_branch\
+    $git_status\
+)\
+(\
+    $python\
+    $conda\
+    $nodejs\
+)\
+$cmd_duration
+[╰─](fg:arrow)$character\
+"""
+
+# Disables the blank line at the start of the prompt
+add_newline = true
+
+# Set palette from a theme below
+palette = "onedark_pro"
+
+## Themes
+
+[palettes.onedark]
+arrow = "#353535"
+os = "#2C3032"
+os_admin = "#6A040F"
+directory = "#363C3E"
+time = "#474D5C"
+node = "#F1DEA9"
+git = "#D0DBDA"
+git_status = "#DFEBED"
+python = "#F5CB5C"
+conda = "#3EB049"
+java = "#861215"
+rust = "#C33C00"
+clang = "#00599D"
+duration = "#F4FBFF"
+text_color = "#EDF2F4"
+text_light = "#26272A"
+
+[palettes.onedark_pro]
+arrow = "#3E4451"
+os = "#282C34"
+os_admin = "#E06C75"
+directory = "#61AFEF"
+time = "#98C379"
+node = "#E5C07B"
+git = "#C678DD"
+git_status = "#56B6C2"
+python = "#D19A66"
+conda = "#98C379"
+java = "#E06C75"
+rust = "#FF8800"
+clang = "#61AFEF"
+duration = "#ABB2BF"
+text_color = "#FFFFFF"
+text_light = "#3E4451"
+
+[palettes.material]
+arrow = "#B0BEC5"
+os = "#37474F"
+os_admin = "#D32F2F"
+directory = "#1E88E5"
+time = "#43A047"
+node = "#FBC02D"
+git = "#8E24AA"
+git_status = "#039BE5"
+python = "#FB8C00"
+conda = "#388E3C"
+java = "#D81B60"
+rust = "#5D4037"
+clang = "#0288D1"
+duration = "#757575"
+text_color = "#212121"
+text_light = "#F5F5F5"
+
+[palettes.panda]
+arrow = "#343B44"
+os = "#1E1F29"
+os_admin = "#FF5555"
+directory = "#19F9D8"
+time = "#FFCC95"
+node = "#FFB86C"
+git = "#BD93F9"
+git_status = "#8BE9FD"
+python = "#F1FA8C"
+conda = "#50FA7B"
+java = "#FF79C6"
+rust = "#FF6E6E"
+clang = "#8BE9FD"
+duration = "#6272A4"
+text_color = "#E6E6E6"
+text_light = "#BFBFBF"
+
+[palettes.tokyo_night]
+arrow = "#3C4556"
+os = "#1A1B26"
+os_admin = "#F7768E"
+directory = "#7AA2F7"
+time = "#9ECE6A"
+node = "#E0AF68"
+git = "#BB9AF7"
+git_status = "#7DCFFF"
+python = "#FF9E64"
+conda = "#73DACA"
+java = "#F7768E"
+rust = "#FF7A93"
+clang = "#7AA2F7"
+duration = "#565F89"
+text_color = "#C0CAF5"
+text_light = "#A9B1D6"
+
+[palettes.ayu]
+arrow = "#5C6773"
+os = "#0E1419"
+os_admin = "#F07178"
+directory = "#36A3D9"
+time = "#FFB454"
+node = "#FF7733"
+git = "#E6BA7E"
+git_status = "#A1EFD3"
+python = "#FFB454"
+conda = "#95E6CB"
+java = "#F29718"
+rust = "#F07178"
+clang = "#36A3D9"
+duration = "#3E4C59"
+text_color = "#D9D7CE"
+text_light = "#C7CCD1"
+
+[palettes.blueloco_dark]
+arrow = "#4C566A"
+os = "#2E3440"
+os_admin = "#BF616A"
+directory = "#81A1C1"
+time = "#88C0D0"
+node = "#EBCB8B"
+git = "#B48EAD"
+git_status = "#8FBCBB"
+python = "#D08770"
+conda = "#A3BE8C"
+java = "#BF616A"
+rust = "#D57780"
+clang = "#81A1C1"
+duration = "#4C566A"
+text_color = "#ECEFF4"
+text_light = "#D8DEE9"
+
+[palettes.bearded]
+arrow = "#4B5263"
+os = "#0D0E16"
+os_admin = "#E94F64"
+directory = "#5FB0FC"
+time = "#FAC863"
+node = "#F78C6C"
+git = "#C792EA"
+git_status = "#A3BE8C"
+python = "#FFCB6B"
+conda = "#82AAFF"
+java = "#D4846C"
+rust = "#FF5370"
+clang = "#82AAFF"
+duration = "#546E7A"
+text_color = "#D8DEE9"
+text_light = "#E5E9F0"
+
+## Prompt
+
+[username]
+style_user = 'os'
+style_root = 'os_admin'
+format = '[]($style)[ ߷ ](bg:$style fg:text_color)[]($style)'
+disabled = false
+show_always = true
+
+[character]
+success_symbol = "[󰍟](fg:arrow)"
+error_symbol = "[󰍟](fg:red)"
+
+[directory]
+format = " [](fg:directory)[ » $path ]($style)[$read_only]($read_only_style)[](fg:directory)"
+truncation_length = 2
+style = "fg:text_color bg:directory"
+read_only_style = "fg:text_color bg:directory"
+before_repo_root_style = "fg:text_color bg:directory"
+truncation_symbol = "…/"
+truncate_to_repo = true
+read_only ="  "
+
+[time]
+disabled = false
+format = " [](fg:time)[ $time]($style)[](fg:time)"
+time_format = "%H:%M"
+style = "fg:text_color bg:time"
+
+[cmd_duration]
+format = " [](fg:duration)[ $duration]($style)[](fg:duration)"
+style = "fg:text_light bg:duration"
+min_time = 500
+
+[git_branch]
+format = " [](fg:git)[$symbol$branch](fg:text_light bg:git)[](fg:git)"
+symbol = " "
+
+[git_status]
+format = '([ ](fg:git_status)[ $all_status$ahead_behind ]($style)[](fg:git_status))'
+style = "fg:text_light bg:git_status"
+
+[docker_context]
+disabled=true
+symbol = " "
+
+[package]
+disabled=true
+
+[nodejs]
+format = "[ ](fg:node)[$symbol$version]($style)[](fg:node)"
+style = "bg:node fg:text_light"
+symbol = " "
+version_format = "${raw}"
+disabled=false
+
+[rust]
+format = "[ ](fg:rust)[$symbol$version](bg:rust fg:text_color)[](fg:rust)"
+symbol = " "
+version_format = "${raw}"
+disabled=true
+
+[python]
+disabled=false
+format = '[ ](fg:python)[${symbol}${pyenv_prefix}(${version} )(\($virtualenv\))]($style)[](fg:python)'
+symbol = " "
+version_format = "${raw}"
+style = "fg:text_light bg:python"
+
+[conda]
+format = "[ ](fg:conda)[$symbol$environment]($style)[](fg:conda)"
+style = "bg:conda fg:text_color"
+ignore_base = false
+disabled=false
+symbol = " "
+
+[os.symbols]
+Alpine = " "
+Amazon = " "
+Android = " "
+Arch = " "
+CentOS = " "
+Debian = " "
+DragonFly = " "
+Emscripten = " "
+EndeavourOS = " "
+Fedora = " "
+FreeBSD = " "
+Gentoo = " "
+Linux = " "
+Macos = " "
+Manjaro = " "
+Mariner = " "
+MidnightBSD = " "
+Mint = " "
+NetBSD = " "
+NixOS = " "
+openSUSE = " "
+Pop = " "
+Raspbian = " "
+Redhat = " "
+RedHatEnterprise = " "
+Redox = " "
+SUSE = " "
+Ubuntu = " "
+Unknown = " "
+Windows = " "
