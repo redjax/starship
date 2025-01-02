@@ -20,14 +20,57 @@ The package manager to use.
 #>
 Param(
     [switch]$Debug,
+    [switch]$Verbose,
     [switch]$DryRun,
-    [string]$PkgInstaller = "winget"   
+    [string]$PkgInstaller = "winget",
+    [string]$StarshipProfile = "_default"
 )
 
 ## Enable debug logging if -Debug is passed
 If ( $Debug ) {
     $DebugPreference = "Continue"
 }
+
+## Enable verbose logging if -Verbose is passed
+If ( $Verbose ) {
+    $VerbosePreference = "Continue"
+
+    Write-Verbose "[ Verbose Mode ] Verbose logging enabled. Additional logging will print.`n"
+}
+
+###########
+# Globals #
+###########
+
+## Set location to path where script was launched from
+$CWD = "$($PWD)"
+Write-Verbose "Script launched from path: $($CWD)"
+
+## Get the full path of the script being executed
+$ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+## Get the parent directory of the script directory
+$THIS_DIR = Split-Path -Parent $ScriptDirectory
+Write-Verbose "Script location: $($THIS_DIR)"
+
+## Set path to user's $HOME
+$UserHome = "$($env:USERPROFILE)"
+Write-Verbose "User home path: $($UserHome)"
+
+## Path to .config
+$DotConfigDir = "$($UserHome)\.config"
+Write-Verbose ".config path: $($DotConfigDir) [exists: $( Test-Path -Path $DotConfigDir )]"
+
+## Path to Starship configs/ directory
+$StarshipRepoConfigDir = "$($THIS_DIR)\configs"
+Write-Verbose "Starship configs path: $($StarshipRepoConfigDir)"
+
+## Path to $HOME/.config/starship.toml
+$StarshipTomlFile = "$($DotConfigDir)\starship.toml"
+Write-Verbose "Starship config path: $($StarshipTomlFile) [exists: $( Test-Path -Path $StarshipTomlFile )]"
+
+#############
+# Functions #
+#############
 
 function Test-CommandExists {
     <#
@@ -48,7 +91,7 @@ function Test-CommandExists {
     )
 
     $CmdExists = ($null -ne (Get-Command $Command -ErrorAction SilentlyContinue))
-    Write-Debug "Command '$Command' exists: $CmdExists."
+    Write-Verbose "Command '$Command' exists: $CmdExists."
 
     return $CmdExists
 }
@@ -257,7 +300,7 @@ If ( Get-Command starship ) {
         ## Read $PROFILE contents into variable
         try {
             $ProfileContent = Get-Content -Path $PROFILE -ErrorAction SilentlyContinue
-            Write-Debug "Loaded `$PROFILE contents"
+            Write-Verbose "Loaded `$PROFILE contents from path: $($PROFILE)"
         }
         catch {
             Write-Error "Failed to read the Powershell profile at path: $PROFILE. Details: $($_.Exception.Message)"
@@ -274,7 +317,7 @@ If ( Get-Command starship ) {
         $InitLineExists = $ProfileContent -match "Invoke-Expression\s+\(\&starship\s+init\s+powershell\)"
 
         If ( $null -ne $InitLineExists ) {
-            Write-Host "`nStarship initialization found in `$PROFILE." -ForegroundColor Cyan
+            Write-Host "Starship initialization found in `$PROFILE." -ForegroundColor Cyan
             If ( -Not $DryRun ) {
                 return
             }
@@ -312,6 +355,11 @@ Found Starship init line in `$PROFILE: $InitLineExists $( If ( -Not $InitLineExi
         }
     }
 }
+
+
+##############
+# Entrypoint #
+##############
 
 function main {
     Write-Host @"
@@ -365,5 +413,9 @@ function main {
     Set-StarshipInPSProfile
 }
 
-
-main
+try {
+    main
+} catch {
+    Write-Error "Starship setup script failed. Details: $($_.Exception.Message)"
+    exit 1
+}
