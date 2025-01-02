@@ -22,6 +22,7 @@ Param(
     [switch]$Debug,
     [switch]$Verbose,
     [switch]$DryRun,
+    [switch]$Overwrite,
     [string]$PkgInstaller = "winget",
     [string]$StarshipProfile = "_default"
 )
@@ -61,7 +62,7 @@ $DotConfigDir = "$($UserHome)\.config"
 Write-Verbose ".config path: $($DotConfigDir) [exists: $( Test-Path -Path $DotConfigDir )]"
 
 ## Path to Starship configs/ directory
-$StarshipRepoConfigDir = "$($THIS_DIR)\configs"
+$StarshipRepoConfigDir = "$($CWD)\configs"
 Write-Verbose "Starship configs path: $($StarshipRepoConfigDir)"
 
 ## Path to $HOME/.config/starship.toml
@@ -257,6 +258,34 @@ function Start-StarshipInstall {
     }
 }
 
+function New-StarshipProfileBackup {
+    $BackupPath = "$($DotConfigDir)\starship.toml.bak"
+
+    $StarshipConfigExists = ( Test-Path -Path $StarshipTomlFile )
+
+    If ( $DryRun ) {
+        Write-Host @"
+[DryRun] Existing config backup
+Starship config exists: $($StarshipConfigExists) $( If ( $StarshipConfigExists ) { "| Would have created a backup of existing Starship config at: $BackupPath." })
+
+"@ -ForegroundColor Magenta
+
+    return
+    }
+
+    If ( $StarshipConfigExists ) {
+        Write-Host "Backing up existing Starship config to $($BackupPath)" -ForegroundColor Cyan
+
+        try {
+            Move-Item -Path $StarshipTomlFile -Destination $BackupPath -Force
+
+        } catch {
+            Write-Error "Failed to backup existing Starship config. Details: $($_.Exception.Message)"
+            exit 1
+        }
+    }
+}
+
 function Set-StarshipInPSProfile {
     <#
     .SYNOPSIS
@@ -356,12 +385,42 @@ Found Starship init line in `$PROFILE: $InitLineExists $( If ( -Not $InitLineExi
     }
 }
 
+function Select-StarshipProfile {
+    Param(
+        [Parameter(Mandatory = $true)]
+        [string]$StarshipTomlFile
+    )
+
+    $StarshipProfilePath = "$($StarshipRepoConfigDir)\$($StarshipProfile).toml"
+
+    If ( -Not ( Test-Path -Path $StarshipProfilePath ) ) {
+        Write-Error "Starship profile does not exist at path: $StarshipProfilePath"
+        return $false
+    }
+
+    return $StarshipProfilePath
+}
+
 
 ##############
 # Entrypoint #
 ##############
 
 function main {
+    If ( $DryRun  ) {
+        Write-Verbose "[DryRun] Skipping check for existing Starship profile. On executions without -DryRun, script exist immediately if an existing configuration is detected and no -Overwrite parameter was passed."
+    }
+    else {
+        If (  Test-Path -Path $StarshipTomlFile ) {
+            Write-Warning "Existing Starship profile detected."
+
+            If ( -Not $Overwrite ) {
+                Write-Warning "Script will exit. If you want to continue even when an existing Starship configuration is detected, run the script with -Overwrite."
+                exit 0
+            }
+        }
+    }
+
     Write-Host @"
 
     [ Starship shell setup script | Package Manager: $($PkgInstaller) ]
@@ -411,11 +470,19 @@ function main {
     Write-Host "`n[ Configure ]`n" -ForegroundColor Green
     ## Add Starship init to Powershell $PROFILE
     Set-StarshipInPSProfile
+
+    ## Backup existing Starship config, if it exists
+    New-StarshipProfileBackup
+
+    Write-Host "Selecting Starship profile from configs directory" -ForegroundColor Cyan
+    ## Set path to Starship TOML profile
+    $StarshipProfile = Select-StarshipProfile -StarshipTomlFile $StarshipTomlFile
 }
 
 try {
     main
-} catch {
+}
+catch {
     Write-Error "Starship setup script failed. Details: $($_.Exception.Message)"
     exit 1
 }
