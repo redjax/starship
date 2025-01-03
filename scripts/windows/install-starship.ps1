@@ -24,7 +24,8 @@ Param(
     [switch]$DryRun,
     [switch]$Overwrite,
     [string]$PkgInstaller = "winget",
-    [string]$StarshipProfile = "_default"
+    [string]$StarshipProfile = "_default",
+    [string]$NerdFont = "FiraMono"
 )
 
 ## Enable debug logging if -Debug is passed
@@ -71,6 +72,41 @@ Write-Verbose "Starship config path: $($StarshipTomlFile) [exists: $( Test-Path 
 
 ## Valid package managers
 $ValidPackageManagers = @("winget", "choco", "scoop")
+
+## Supported NerdFonts and their package names for scoop & choco
+$ValidNerdFonts = @"
+{
+    "FiraMono": {
+        "scoop": "FiraMono-NF",
+        "choco": "nerd-font-FiraMono"
+    },
+    "FiraCode": {
+        "scoop": "FiraCode-NF",
+        "choco": "nerd-font-FiraCode"
+    },
+    "HackMono": {
+        "scoop": "Hack-NF-Mono",
+        "choco": "nerdfont-hack"
+    },
+    "IosevkaTerm": {
+        "scoop": "IosevkaTerm-NF-Mono",
+        "choco": "nerd-fonts-IosevkaTerm"
+    },
+    "UbuntuMono": {
+        "scoop": "UbuntuMono-NF-Mono",
+        "choco": "nerd-fonts-UbuntuMono"
+    }
+}
+"@
+
+## Load fonts JSON data
+$FontsJson = $ValidNerdFonts | ConvertFrom-Json
+if ( $Debug ) {
+    Write-Debug "NerdFont JSON data:"
+    $FontsJson | Format-List
+
+    Write-Debug "FontsJson Keys: $($FontsJson.PSObject.Properties.Name -join ', ')"
+}
 
 #############
 # Functions #
@@ -136,10 +172,19 @@ function Test-ScoopPackageExists() {
         [Parameter(Mandatory = $true)]
         [string]$PackageName
     )
+
+    if ( -Not $PackageName ) {
+        Write-Error "Cannot test if Scoop package exists, package name is `$null/empty."
+        exit 1
+    }
+
     if (scoop list | Select-String -Pattern "$PackageName") {
-        Write-Host "Scoop package '$PackageName' is installed."
-    } else {
-        Write-Host "Scoop package '$PackageName' is not installed."
+        Write-Debug "Scoop package '$PackageName' is installed."
+        return $true
+    }
+    else {
+        Write-Debug "Scoop package '$PackageName' is not installed."
+        return $false
     }
 }
 
@@ -160,7 +205,8 @@ function Test-ChocoPackageExists() {
     )
     if (choco list --local-only | Select-String -Pattern "$PackageName") {
         Write-Host "Chocolatey package '$PackageName' is installed."
-    } else {
+    }
+    else {
         Write-Host "Chocolatey package '$PackageName' is not installed."
     }
 }
@@ -283,36 +329,55 @@ function Start-NerdFontInstall() {
     Param(
         [Parameter(Mandatory = $true)]
         [string]$PkgManager,
-        $FontName = "FiraMono-NF"
+        [string]$FontName = "FiraMono"
     )
 
     If ( $DryRun ) {
-        Write-Host "[DryRun] Would have installed Starship with $PkgManager." -ForegroundColor Magenta
+        Write-Host "[DryRun] Would have installed a Nerd Font with $( if ($PkgManager -eq "winget") {"scoop"} else { $PkgManager })." -ForegroundColor Magenta
         return
     }
+
+    if ( $PkgManager -eq "winget" ) {
+        Write-Warning "Installing NerdFonts with winget is not supported. Setting package manager to 'scoop'. If scoop is not installed, script will exit."
+        $PkgManager = "scoop"
+    }
+
+    Write-Debug "NerdFont: '$($FontName)', package manager: $PkgManager"
 
     If ( -Not ( Test-CommandExists "$($PkgManager)" ) ) {
         Write-Error "Package manager '$($PkgManager)' is not installed."
         exit 1
     }
+    
+    switch ($PkgManager) {
 
-    ## Test if Starship is already installed.
-    $StarshipInstalled = Test-CommandExists "starship"
-    Write-Debug "Starship installed: $StarshipInstalled."
+        "scoop" {
+            Write-Debug "Using scoop package manager"
 
-    If ( $StarshipInstalled ) {
-        Write-Host "Starship is already installed." -ForegroundColor Cyan
-        return
-    }
+            ## Test if nerdfont is already installed.
+            $NerdFontInstalled = Test-ScoopPackageExists -PackageName $FontName
+            Write-Debug "NerdFont '$($FontName)' installed: $NerdFontInstalled."
 
-    Write-Host "Installing Starship with $PkgManager..." -ForegroundColor Cyan
-    switch ($PkgInstaller) {
+            If ( $NerdFontInstalled ) {
+                Write-Host "NerdFont '$($FontName)' is already installed." -ForegroundColor Cyan
+                return
+            }
 
-        "scoop" { 
+            ## Check if the FontName exists in the JSON data
+            if ( -not $FontsJson.PSObject.Properties.Name -contains $FontName ) {
+                Write-Error "Font '$FontName' not found in the mapping."
+                return $null
+            }
 
-            ## Install Starship with Scoop.
+            ## Retrieve font object from JSON
+            $FontDetails = $FontsJson.$FontName
+            Write-Debug "NerdFont '$($FontName)' details: $FontDetails."
+
+            Write-Host "Installing NerdFont '$($FontName)' with scoop" -ForegroundColor Cyan
+
+            ## Install NerdFont with Scoop.
             try {
-                scoop install starship
+                scoop install $FontDetails.scoop
                 return
             }
             catch {
@@ -322,27 +387,43 @@ function Start-NerdFontInstall() {
         }
 
         "choco" { 
-            ## Install Starship with Chocolatey.
+            Write-Debug "Using chocolatey package manager"
+
+            ## Test if nerdfont is already installed.
+            $NerdFontInstalled = Test-ChocoPackageExists -PackageName $FontName
+            Write-Debug "NerdFont '$($FontName)' installed: $NerdFontInstalled."
+
+            If ( $NerdFontInstalled ) {
+                Write-Host "NerdFont '$($FontName)' is already installed." -ForegroundColor Cyan
+                return
+            }
+
+            ## Check if the FontName exists in the JSON data
+            if ( -not $FontsJson.PSObject.Properties.Name -contains $FontName ) {
+                Write-Error "Font '$FontName' not found in the mapping."
+                return $null
+            }
+
+            ## Retrieve font object from JSON
+            $FontDetails = $FontsJson.$FontName
+            Write-Debug "NerdFont '$($FontName)' details: $FontDetails."
+
+            Write-Host "Installing NerdFont '$($FontName)' with chocolatey" -ForegroundColor Cyan
+
+            ## Install NerdFont with Chocolatey.
             try {
-                choco install starship -y
+                choco install $fontDetails.choco -y
                 return
             }
             catch {
-                Write-Error "Failed to install Starship with Chocolatey."
+                Write-Error "Failed to install NerdFont with Chocolatey."
                 return $false
             }
         }
 
         "winget" { 
-            ## Install Starship with Winget.
-            try {
-                winget install -e --id Starship.Starship
-                return
-            }
-            catch {
-                Write-Error "Failed to install Starship with Winget."
-                return $false
-            }
+            Write-Error "NerdFonts are not available for install with winget. Use scoop or chocolatey."
+            exit 1
         }
 
         default { Write-Error "Unknown package manager: $PkgInstaller" ; exit 1 }
@@ -644,7 +725,7 @@ function main {
 "@ -ForegroundColor Yellow
     }
 
-    Write-Host "[ Install ]`n" -ForegroundColor Green
+    Write-Host "[ Install | Starship ]`n" -ForegroundColor Green
     ## Install Starship if not installed
     If ( -Not (Test-CommandExists "starship") ) {
         try {
@@ -657,6 +738,16 @@ function main {
     }
     else {
         Write-Host "Starship is already installed." -ForegroundColor Cyan
+    }
+
+    Write-Host "`n[ Install | NerdFont ]`n" -ForegroundColor Green
+    ## Install NerdFont
+    try {
+        Start-NerdFontInstall -PkgManager $PkgInstaller -FontName $NerdFont
+    }
+    catch {
+        Write-Error "Error installing NerdFont. Details: $($_.Exception.Message)"
+        exit 1
     }
 
     Write-Host "`n[ Configure ]`n" -ForegroundColor Green
