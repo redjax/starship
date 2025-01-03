@@ -839,7 +839,7 @@ Please select one from the list, or hit Enter to use the _default profile.`n" -F
 
         ## Create Starship profile symlink
         try {
-            New-StarshipProfileSymlink -StarshipProfile $StarshipProfile
+            New-StarshipProfileSymlink -StarshipProfile "$($REPO_ROOT)/configs/$StarshipProfile.toml"
         }
         catch {
             Write-Error "Failed to create symlink to Starship profile. Details: $($_.Exception.Message)"
@@ -956,9 +956,10 @@ function main {
     Write-Host "`n[ Configure | Starship profile selection ]`n" -ForegroundColor Green
     Switch-StarshipProfile -StarshipProfile $StarshipProfile
 
+    Write-Host "`n[ Configure | Starship profile symlink ]`n" -ForegroundColor Green
     ## Create Starship profile symlink
     try {
-        New-StarshipProfileSymlink -StarshipProfile $StarshipProfile
+        New-StarshipProfileSymlink -StarshipProfile "$($REPO_ROOT)/configs/$StarshipProfile.toml"
     }
     catch {
         Write-Error "Failed to create symlink to Starship profile. Details: $($_.Exception.Message)"
