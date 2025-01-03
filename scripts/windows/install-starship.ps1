@@ -22,6 +22,15 @@ If not specified, the _default profile will be used.
 .PARAMETER NerdFont
 The name of the NerdFont to install. Defaults to FiraMono, installed with the Scoop package manager (scoop must be installed).
 
+.PARAMETER Overwrite
+Overwrite the Starship config file if it already exists.
+
+.PARAMETER ShowProfiles
+Print available profiles and exit.
+
+.PARAMETER SwitchProfile
+Switch to the specified Starship profile.
+
 .EXAMPLE
 .\install-starship.ps1 -DryRun -Debug -PkgInstaller scoop
 #>
@@ -33,7 +42,8 @@ Param(
     [string]$PkgInstaller = "winget",
     [string]$StarshipProfile = $null,
     [string]$NerdFont = "FiraMono",
-    [switch]$ShowProfiles
+    [switch]$ShowProfiles,
+    [switch]$SwitchProfile
 )
 
 ## Enable debug logging if -Debug is passed
@@ -61,10 +71,12 @@ $ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 ## Get the parent directory of the script directory
 $THIS_DIR = Split-Path -Parent $ScriptDirectory
 
+Write-Verbose "Script parent: $($ScriptDirectory)"
+Write-Verbose "Script location: $($THIS_DIR)"
+
 ## Set path to repository root
 $REPO_ROOT = Split-Path -Parent $THIS_DIR
-
-Write-Verbose "Script location: $($THIS_DIR)"
+Write-Verbose "Repository root: $($REPO_ROOT)"
 
 ## Set path to user's $HOME
 $UserHome = "$($env:USERPROFILE)"
@@ -683,7 +695,8 @@ function New-StarshipProfileSymlink {
     #>
     Param(
         [Parameter(Mandatory = $true)]
-        [string]$StarshipProfile
+        [string]$StarshipProfile,
+        [switch]$Overwrite = $true
     )
 
     If ( $DryRun ) {
@@ -761,6 +774,59 @@ function New-StarshipProfileSymlink {
     }
 }
 
+function Switch-StarshipProfile() {
+    Param(
+        [string]$StarshipProfile = $StarshipProfile
+    )
+
+    Write-Debug "-SwitchProfile parameter detected, skipping execution & just switching profile"
+
+    Write-Debug "`$StarshipProfile=$StarshipProfile"
+    if ( ( $null -eq $StarshipProfile ) -or ( $StarshipProfile -eq "" ) ) {
+        Write-Host "No Starship profile specified with -StarshipProfile parameter.
+Please select one from the list, or hit Enter to use the _default profile.`n" -ForegroundColor Cyan
+
+        try {
+            $SelectedProfile = Select-StarshipProfileFromList
+            Write-Debug "Selected Starship profile: $SelectedProfile"
+        } catch {
+            Write-Error "Failed to select Starship profile. Details: $($_.Exception.Message)"
+            exit 1
+        }
+
+        if ( ( $null -eq $SelectedProfile ) ) {
+            Write-Debug "No profile selected. Using _default profile."
+            $SelectedProfile = "_default"
+        }
+
+        $StarshipProfile = $SelectedProfile
+
+        Write-Host "Using profile: $StarshipProfile" -ForegroundColor Green
+    }
+
+    Write-Host "Selecting Starship profile '$StarshipProfile' from configs directory" -ForegroundColor Cyan
+    ## Set path to Starship TOML profile
+    $StarshipProfile = Select-StarshipProfile -StarshipTomlFile $StarshipTomlFile
+    Write-Host "Selected Starship profile: $StarshipProfile" -ForegroundColor Cyan
+
+    ## Do symlinking in Switch-StarshipProfile when -SwitchProfile is used
+    if ( $SwitchProfile ) { 
+        Write-Host "`n[ Configure | Starship profile symlink ]`n" -ForegroundColor Green
+
+        ## Create Starship profile symlink
+        try {
+            New-StarshipProfileSymlink -StarshipProfile $StarshipProfile
+        }
+        catch {
+            Write-Error "Failed to create symlink to Starship profile. Details: $($_.Exception.Message)"
+            exit 1
+        }
+
+        Write-Host "Switched Starship profile to $StarshipProfile" -ForegroundColor Green
+        exit 0
+    }
+}
+
 ##############
 # Entrypoint #
 ##############
@@ -771,6 +837,13 @@ function main {
     If ( $ShowProfiles ) {
         Write-Debug "-ShowProfiles parameter detected, show available profiles & exit"
         Show-StarshipProfiles
+        exit 0
+    }
+
+    ## If -SwitchProfile detected, skip portions of execution to just switch profile
+    If ( $SwitchProfile ) {
+        Write-Host "`n[ Configure | Starship profile selection ]`n" -ForegroundColor Green
+        Switch-StarshipProfile -StarshipProfile $StarshipProfile
         exit 0
     }
 
@@ -851,39 +924,7 @@ function main {
     }
 
     Write-Host "`n[ Configure | Starship profile selection ]`n" -ForegroundColor Green
-
-    Write-Debug "`$StarshipProfile=$StarshipProfile"
-    if ( ( $null -eq $StarshipProfile ) -or ( $StarshipProfile -eq "" ) ) {
-        Write-Host "No Starship profile specified with -StarshipProfile parameter.
-Please select one from the list, or hit Enter to use the _default profile.`n" -ForegroundColor Cyan
-
-        try {
-            $SelectedProfile = Select-StarshipProfileFromList
-            Write-Debug "Selected Starship profile: $SelectedProfile"
-        } catch {
-            Write-Error "Failed to select Starship profile. Details: $($_.Exception.Message)"
-            exit 1
-        }
-
-        if ( ( $null -eq $SelectedProfile ) ) {
-            Write-Debug "No profile selected. Using _default profile."
-            $SelectedProfile = "_default"
-        }
-
-        $StarshipProfile = $SelectedProfile
-
-        Write-Host "Using profile: $StarshipProfile" -ForegroundColor Green
-    }
-
-    ## Add Starship init to Powershell $PROFILE
-    Set-StarshipInPSProfile
-
-    Write-Host "Selecting Starship profile '$StarshipProfile' from configs directory" -ForegroundColor Cyan
-    ## Set path to Starship TOML profile
-    $StarshipProfile = Select-StarshipProfile -StarshipTomlFile $StarshipTomlFile
-    Write-Host "Selected Starship profile: $StarshipProfile" -ForegroundColor Green
-
-    Write-Host "`n[ Configure | Starship profile symlink ]`n" -ForegroundColor Green
+    Switch-StarshipProfile -StarshipProfile $StarshipProfile
 
     ## Create Starship profile symlink
     try {
@@ -893,6 +934,10 @@ Please select one from the list, or hit Enter to use the _default profile.`n" -F
         Write-Error "Failed to create symlink to Starship profile. Details: $($_.Exception.Message)"
         exit 1
     }
+
+    Write-Host "`n[ Configure | Starship init line in Powershell `$PROFILE ]`n" -ForegroundColor Green
+    ## Add Starship init to Powershell $PROFILE
+    Set-StarshipInPSProfile
 }
 
 try {
