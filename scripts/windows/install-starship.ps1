@@ -25,7 +25,8 @@ Param(
     [switch]$Overwrite,
     [string]$PkgInstaller = "winget",
     [string]$StarshipProfile = "_default",
-    [string]$NerdFont = "FiraMono"
+    [string]$NerdFont = "FiraMono",
+    [switch]$ShowProfiles
 )
 
 ## Enable debug logging if -Debug is passed
@@ -52,6 +53,10 @@ Write-Verbose "Script launched from path: $($CWD)"
 $ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 ## Get the parent directory of the script directory
 $THIS_DIR = Split-Path -Parent $ScriptDirectory
+
+## Set path to repository root
+$REPO_ROOT = Split-Path -Parent $THIS_DIR
+
 Write-Verbose "Script location: $($THIS_DIR)"
 
 ## Set path to user's $HOME
@@ -237,6 +242,39 @@ function Invoke-ElevatedCommand {
         Invoke-Expression $command
         return $false  # Indicate that the command was run without elevation
     }
+}
+
+function Show-StarshipProfiles {
+    Param (
+        [string]$DirectoryPath = "$($REPO_ROOT)/configs"
+    )
+
+    ## Check if Starship configs directory can be found in repo
+    if ( -not ( Test-Path -Path $DirectoryPath -PathType Container ) ) {
+        Write-Error "Could not find Starship configs directory at path: '$DirectoryPath'"
+        exit 1
+    }
+
+    ## Get all .toml files in the directory
+    $TomlFiles = Get-ChildItem -Path $DirectoryPath -Filter *.toml -File
+
+    if ($TomlFiles.Count -eq 0) {
+        Write-Error "No Starship profile .toml files found in '$DirectoryPath'."
+        exit 1
+    }
+
+    ## Display the list of .toml files
+    Write-Host "`n [ Available Starship Profiles ]`n" -ForegroundColor Cyan
+    $TomlFiles | ForEach-Object {
+        ## Remove the .toml extension from the filename before displaying
+        $ProfileName = $_.BaseName
+        Write-Host "- $ProfileName" -ForegroundColor Green
+    }
+
+    Write-Host "`n[USAGE] Re-run the script with -StarshipProfile <profile-name>,
+where <profile-name> is one from the list above,
+or omit the -StarshipProfile parameter to use the _default profile." -ForegroundColor Cyan
+    exit 0
 }
 
 function Start-StarshipInstall {
@@ -674,6 +712,13 @@ function New-StarshipProfileSymlink {
 ##############
 
 function main {
+
+    ## If -ShowProfiles detected, skip execution and just print profiles
+    If ( $ShowProfiles ) {
+        Show-StarshipProfiles
+        exit 0
+    }
+
     If ( $DryRun  ) {
         Write-Verbose "[DryRun] Skipping check for existing Starship profile. On executions without -DryRun, script exist immediately if an existing configuration is detected and no -Overwrite parameter was passed."
     }
