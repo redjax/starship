@@ -178,7 +178,7 @@ function Test-ScoopPackageExists() {
         exit 1
     }
 
-    if (scoop list | Select-String -Pattern "$PackageName") {
+    if ( scoop list | Select-String -Pattern "$PackageName" ) {
         Write-Debug "Scoop package '$PackageName' is installed."
         return $true
     }
@@ -606,12 +606,12 @@ function New-StarshipProfileSymlink {
 
             ## Check if the path is a junction/symlink
             If ($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
-                Write-Host "Path is already a junction or symlink: $StarshipTomlFile"
+                Write-Host "Path is already a junction or symlink: $StarshipTomlFile" -ForegroundColor Cyan
                 if ( -Not $Overwrite ) {
                     return
                 }
                 else {
-                    Write-Host "-Overwrite parameter detected. Removing existing junction to create new one."
+                    Write-Warning "-Overwrite parameter detected. Removing existing junction to create new one."
                     try {
                         ## Remove existing junction if it exists and -Overwrite is passed to the script
                         Remove-Item -Path $StarshipTomlFile -Force
@@ -652,7 +652,7 @@ function New-StarshipProfileSymlink {
         Write-Warning "Script was not run as administrator. Running symlink command as administrator."
     
         try {
-            Invoke-ElevatedCommand -Command "$($SymlinkExpression)"
+            Invoke-ElevatedCommand -Command "$($SymlinkExpression)" | Out-Null
         }
         catch {
             Write-Error "Error creating symlink from $StarshipProfile to $StarshipTomlFile. Details: $($_.Exception.Message)"
@@ -750,7 +750,7 @@ function main {
         exit 1
     }
 
-    Write-Host "`n[ Configure ]`n" -ForegroundColor Green
+    Write-Host "`n[ Configure | Starship profile selection ]`n" -ForegroundColor Green
     ## Add Starship init to Powershell $PROFILE
     Set-StarshipInPSProfile
 
@@ -758,6 +758,8 @@ function main {
     ## Set path to Starship TOML profile
     $StarshipProfile = Select-StarshipProfile -StarshipTomlFile $StarshipTomlFile
     Write-Host "Selected Starship profile: $StarshipProfile" -ForegroundColor Green
+
+    Write-Host "`n[ Configure | Starship profile symlink ]`n" -ForegroundColor Green
 
     ## Create Starship profile symlink
     try {
@@ -771,7 +773,7 @@ function main {
 
 try {
     main
-    Write-Host "Starship installed & profile configured." -ForegroundColor Green
+    Write-Host "`n[SUCCESS] Starship installed & profile configured." -ForegroundColor Green
 }
 catch {
     Write-Error "Starship setup script failed. Details: $($_.Exception.Message)"
