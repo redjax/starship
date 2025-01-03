@@ -110,45 +110,30 @@ function Test-CommandExists {
 
 function Invoke-ElevatedCommand {
     param (
-        [Parameter(Mandatory = $true)]
-        [ScriptBlock]$CodeBlock,
-        
-        [Parameter()]
-        [Hashtable]$Arguments
+        [string]$Command
     )
 
-    # Serialize arguments for passing to the elevated process
-    $SerializedArgs = $Arguments | ConvertTo-Json -Depth 10
+    # Check if the script is running as admin
+    $isAdmin = [bool](New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    
+    if (-not $isAdmin) {
+        # Prompt to run as administrator if not already running as admin
+        $arguments = "-Command `"& {$command}`""
+        Write-Debug "Running command: Start-Process powershell -ArgumentList $($arguments) -Verb RunAs"
 
-    # Prepare the script content to run as admin
-    $TempScriptPath = [System.IO.Path]::GetTempFileName() + ".ps1"
-    $ScriptContent = @"
-    Param (
-        [string]\$SerializedArgs
-    )
-    # Deserialize arguments
-    \$ArgsHash = \$SerializedArgs | ConvertFrom-Json
-    # Run the code block
-    & {
-        $CodeBlock
-    } @ArgsHash
-"@
-
-    # Write the temporary script
-    Set-Content -Path $TempScriptPath -Value $ScriptContent
-
-    # Run the script as an administrator
-    $ArgumentsList = "-NoProfile -ExecutionPolicy Bypass -File `"$TempScriptPath`" -SerializedArgs '$SerializedArgs'"
-    $process = Start-Process powershell.exe -ArgumentList $ArgumentsList -Verb RunAs -PassThru -Wait
-
-    # Capture the exit code
-    $exitCode = $process.ExitCode
-
-    # Clean up
-    Remove-Item -Path $TempScriptPath
-
-    # Return the exit code
-    return $exitCode
+        try {
+            Start-Process powershell -ArgumentList $arguments -Verb RunAs
+            return $true  # Indicate that the script was elevated and the command will run
+        }
+        catch {
+            Write-Error "Error executing command as admin. Details: $($_.Exception.Message)"
+        }
+    }
+    else {
+        # If already running as admin, execute the command
+        Invoke-Expression $command
+        return $false  # Indicate that the command was run without elevation
+    }
 }
 
 function Install-StarshipScoop {
@@ -424,7 +409,8 @@ Found Starship init line in `$PROFILE: $InitLineExists $( If ( -Not $InitLineExi
         Write-Warning "PowerShell profile does not exist. Creating a new profile..."
         try {
             New-Item -Path $PROFILE -ItemType File -Force
-        } catch {
+        }
+        catch {
             Write-Error "Failed to create a new Powershell profile. Details: $($_.Exception.Message)"
             exit 1
         }
@@ -465,6 +451,9 @@ function New-StarshipProfileSymlink {
         [string]$StarshipProfile
     )
 
+    ## This will be flipped to $true if existing Starship config is a junction and starship.bak exists
+    $DoBackup = $false
+
     If ( $DryRun ) {
         Write-Host "[DryRun] Would have created a symlink to Starship profile: $StarshipProfile" -ForegroundColor Magenta
         return
@@ -478,62 +467,62 @@ function New-StarshipProfileSymlink {
             ## Check if the path is a junction/symlink
             If ($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
                 Write-Host "Path is already a junction or symlink: $StarshipTomlFile"
-                return
-            }
-
-            ## Path is a regular file
-            Write-Warning "Path already exists: $StarshipTomlFile. Moving to $StarshipTomlFile.bak"
-            If (Test-Path "$StarshipTomlFile.bak") {
-                Write-Warning "$StarshipTomlFile.bak already exists. Overwriting backup."
-                Remove-Item "$StarshipTomlFile.bak" -Force
-            }
-
-            try {
-                Move-Item $StarshipTomlFile "$StarshipTomlFile.bak"
-            }
-            catch {
-                Write-Error "Error moving $StarshipTomlFile to $StarshipTomlFile.bak. Details: $($_.Exception.Message)"
-                exit 1
-            }
-        }
-
-        ## Set expression to symlink config
-        $SymlinkExpression = {
-            New-Item -ItemType SymbolicLink -Path $StarshipTomlFile -Target $StarshipProfile
-        }
-
-        Write-Host "Creating symlink from $StarshipTomlFile -> $StarshipProfile" -ForegroundColor Cyan
-
-        If ( -Not ( Test-IsAdministrator ) ) {
-            Write-Warning "This script needs to run as administrator. Elevating..."
-
-            try {
-                # Call Invoke-ElevatedCommand and capture the exit code
-                $exitCode = Invoke-ElevatedCommand -CodeBlock $SymlinkExpression
-
-                if ($exitCode -ne 0) {
-                    Write-Error "Failed to create symbolic link. Exit code: $exitCode"
+                if ( -Not $Overwrite ) {
                     return
                 }
+                else {
+                    Write-Host "-Overwrite parameter detected. Removing existing junction to create new one."
+                    try {
+                        Remove-Item -Path $StarshipTomlFile -Force
+                    }
+                    catch {
+                        Write-Error "Failed to remove existing junction at path: $StarshipTomlFile. Details: $($_.Exception.Message)"
+                        exit 1
+                    }
+                }
             }
-            catch {
-                Write-Error "Failed to create symbolic link. Details: $($_.Exception.Message)"
-                return
+            else {
+
+                ## Path is a regular file
+                Write-Warning "Path already exists: $StarshipTomlFile. Moving to $StarshipTomlFile.bak"
+                If (Test-Path "$StarshipTomlFile.bak") {
+                    Write-Warning "$StarshipTomlFile.bak already exists. Overwriting backup."
+                    Remove-Item "$StarshipTomlFile.bak" -Force
+                }
+
+                try {
+                    Move-Item $StarshipTomlFile "$StarshipTomlFile.bak"
+                }
+                catch {
+                    Write-Error "Error moving $StarshipTomlFile to $StarshipTomlFile.bak. Details: $($_.Exception.Message)"
+                    exit 1
+                }
             }
         }
-        else {
-            Write-Debug "Script running as administrator"
+    }
 
-            ## Create the symbolic link
-            try {
-                # Run without elevation since the script is already elevated
-                Invoke-Expression $SymlinkExpression
-                Write-Host "Symlink created: $StarshipTomlFile -> $StarshipProfile" -ForegroundColor Green
-            }
-            catch {
-                Write-Error "Failed to create symbolic link. Details: $($_.Exception.Message)"
-                return
-            }
+    ## Set expression to symlink config
+    $SymlinkExpression = "New-Item -ItemType SymbolicLink -Path $StarshipTomlFile -Target $StarshipProfile"
+
+    Write-Host "Creating symlink from $StarshipProfile -> $StarshipTomlFile" -ForegroundColor Cyan
+
+    If ( -Not ( Test-IsAdministrator ) ) {
+        Write-Warning "Script was not run as administrator. Running symlink command as administrator."
+    
+        try {
+            Invoke-ElevatedCommand -Command "$($SymlinkExpression)"
+        }
+        catch {
+            Write-Error "Error creating symlink from $StarshipProfile to $StarshipTomlFile. Details: $($_.Exception.Message)"
+        }
+    }
+    else {
+        try {
+            Invoke-Expression $SymlinkCommand
+        }
+        catch {
+            Write-Error "Error creating symlink from $StarshipProfile to $StarshipTomlFile. Details: $($_.Exception.Message)"
+            exit 1
         }
     }
 }
@@ -623,6 +612,7 @@ function main {
 
 try {
     main
+    Write-Host "Starship installed & profile configured." -ForegroundColor Green
 }
 catch {
     Write-Error "Starship setup script failed. Details: $($_.Exception.Message)"
