@@ -29,7 +29,7 @@ Overwrite the Starship config file if it already exists.
 Print available profiles and exit.
 
 .PARAMETER SwitchProfile
-Switch to the specified Starship profile.
+Switch to the specified Starship profile. Skips all installations & prompts user for profile name instead
 
 .EXAMPLE
 .\install-starship.ps1 -DryRun -Debug -PkgInstaller scoop
@@ -135,6 +135,27 @@ if ( $Debug ) {
 #############
 # Functions #
 #############
+
+function Show-Help() {
+    Write-Host"@
+    [ Starship Installer | Help ]
+
+    Usage: .\install-starship.ps1 [options]
+
+    Options:
+        -Debug: Enable debug logging.
+        -DryRun: Simulate the script and print the commands that would be executed.
+        -Verbose: Enable verbose logging.
+        -Overwrite: Overwrite the Starship config file if it already exists.
+        -ShowProfiles: Print available profiles and exit.
+        -SwitchProfile: Switch to a different Starship profile.
+
+    Examples:
+        .\install-starship.ps1 -DryRun -Debug  # Print commands that would have been executed, with debug logging enabled
+        .\install-starship.ps1 -ShowProfiles  # Print available profiles
+        .\install-starship.ps1 -SwitchProfile -StarshipProfile minimal  # Will use the ./configs/minimal.toml file
+"@
+}
 
 Function Test-IsAdministrator {
     <#
