@@ -15,6 +15,13 @@ Simulate the script and print the commands that would be executed.
 .PARAMETER PkgInstaller
 The package manager to use.
 
+.PARAMETER StarshipProfile
+The Starship profile to use. This should be the name of a .toml file in the repository's configs/ directory. You do not need to include the .toml extension.
+If not specified, the _default profile will be used.
+
+.PARAMETER NerdFont
+The name of the NerdFont to install. Defaults to FiraMono, installed with the Scoop package manager (scoop must be installed).
+
 .EXAMPLE
 .\install-starship.ps1 -DryRun -Debug -PkgInstaller scoop
 #>
@@ -24,7 +31,7 @@ Param(
     [switch]$DryRun,
     [switch]$Overwrite,
     [string]$PkgInstaller = "winget",
-    [string]$StarshipProfile = "_default",
+    [string]$StarshipProfile = $null,
     [string]$NerdFont = "FiraMono",
     [switch]$ShowProfiles
 )
@@ -157,7 +164,7 @@ function Test-ValidPackageManager() {
         [Parameter(Mandatory = $true)]
         $PkgManager
     )
-    
+
     ## Return $True/$False if $PkgManager is in $ValidPackageManagers
     return $ValidPackageManagers -contains $PkgManager
 }
@@ -223,7 +230,7 @@ function Invoke-ElevatedCommand {
 
     # Check if the script is running as admin
     $isAdmin = [bool](New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    
+
     if (-not $isAdmin) {
         # Prompt to run as administrator if not already running as admin
         $arguments = "-Command `"& {$command}`""
@@ -277,6 +284,53 @@ or omit the -StarshipProfile parameter to use the _default profile." -Foreground
     exit 0
 }
 
+function Select-StarshipProfileFromList {
+    ## Define the path to the configs directory
+    $ConfigDir = "$($REPO_ROOT)/configs"
+
+    ## Get all .toml files in the configs directory
+    $tomlFiles = Get-ChildItem -Path $ConfigDir -Filter *.toml
+
+    if ($tomlFiles.Count -eq 0) {
+        Write-Host "No .toml files found in the 'configs' directory." -ForegroundColor Red
+        return
+    }
+
+    ## Display a numbered list to the user with the .toml extension omitted
+    $tomlFiles | ForEach-Object {
+        $profileName = $_.BaseName  # Get the file name without extension
+        Write-Host "$($tomlFiles.IndexOf($_) + 1). $profileName"
+    }
+
+    ## Ask the user to select a profile
+    try{
+        $selection = Read-Host "Select a profile by number (press Enter for default)"
+    } catch {
+        Write-Error "Failed to read user input. Details: $($_.Exception.Message)"
+        exit 1
+    }
+
+    ## If no selection is made (Enter is pressed), default to "_default"
+    if ($selection -eq "") {
+        $selection = "_default"
+        Write-Host "No selection made. Defaulting to profile: $selection"
+    }
+
+    ## Validate user input if a number was entered
+    if ($selection -ne "_default") {
+        ## Validate user input
+        if ( $selection -lt 1 -or $selection -gt $tomlFiles.Count ) {
+            Write-Host "Invalid selection, please try again." -ForegroundColor Red
+            return
+        }
+
+        ## Get the selected file, remove extension from the selected file name
+        $selectedProfile = $tomlFiles[$selection - 1].BaseName
+    }
+
+    return $selectedProfile
+}
+
 function Start-StarshipInstall {
     <#
     .SYNOPSIS
@@ -322,7 +376,7 @@ function Start-StarshipInstall {
     Write-Host "Installing Starship with $PkgManager..." -ForegroundColor Cyan
     switch ($PkgInstaller) {
 
-        "scoop" { 
+        "scoop" {
 
             ## Install Starship with Scoop.
             try {
@@ -335,7 +389,7 @@ function Start-StarshipInstall {
             }
         }
 
-        "choco" { 
+        "choco" {
             ## Install Starship with Chocolatey.
             try {
                 choco install starship -y
@@ -347,7 +401,7 @@ function Start-StarshipInstall {
             }
         }
 
-        "winget" { 
+        "winget" {
             ## Install Starship with Winget.
             try {
                 winget install -e --id Starship.Starship
@@ -386,7 +440,7 @@ function Start-NerdFontInstall() {
         Write-Error "Package manager '$($PkgManager)' is not installed."
         exit 1
     }
-    
+
     switch ($PkgManager) {
 
         "scoop" {
@@ -424,7 +478,7 @@ function Start-NerdFontInstall() {
             }
         }
 
-        "choco" { 
+        "choco" {
             Write-Debug "Using chocolatey package manager"
 
             ## Test if nerdfont is already installed.
@@ -459,7 +513,7 @@ function Start-NerdFontInstall() {
             }
         }
 
-        "winget" { 
+        "winget" {
             Write-Error "NerdFonts are not available for install with winget. Use scoop or chocolatey."
             exit 1
         }
@@ -476,7 +530,7 @@ function Set-StarshipInPSProfile {
     .DESCRIPTION
     Searches the Powershell $PROFILE for this line:
         Invoke-Expression (&starship init powershell)
-    
+
     If it does not exist, appends it to the end of the $PROFILE to launch
     Starship on Powershell init.
 
@@ -510,7 +564,7 @@ If ( Get-Command starship ) {
     else {
         ## $PROFILE exists
         Write-Host "Reading Powershell profile from: $($PROFILE)" -ForegroundColor Cyan
-        
+
         ## Read $PROFILE contents into variable
         try {
             $ProfileContent = Get-Content -Path $PROFILE -ErrorAction SilentlyContinue
@@ -688,7 +742,7 @@ function New-StarshipProfileSymlink {
 
     If ( -Not ( Test-IsAdministrator ) ) {
         Write-Warning "Script was not run as administrator. Running symlink command as administrator."
-    
+
         try {
             Invoke-ElevatedCommand -Command "$($SymlinkExpression)" | Out-Null
         }
@@ -715,6 +769,7 @@ function main {
 
     ## If -ShowProfiles detected, skip execution and just print profiles
     If ( $ShowProfiles ) {
+        Write-Debug "-ShowProfiles parameter detected, show available profiles & exit"
         Show-StarshipProfiles
         exit 0
     }
@@ -723,7 +778,7 @@ function main {
         Write-Verbose "[DryRun] Skipping check for existing Starship profile. On executions without -DryRun, script exist immediately if an existing configuration is detected and no -Overwrite parameter was passed."
     }
     else {
-        If (  Test-Path -Path $StarshipTomlFile ) {
+        If ( Test-Path -Path $StarshipTomlFile ) {
             Write-Warning "Existing Starship profile detected."
 
             If ( -Not $Overwrite ) {
@@ -742,18 +797,18 @@ function main {
     Write-Host @"
 
     [ Starship shell setup script | Package Manager: $($PkgInstaller) ]
-    
+
     Script will install & configure Starship & its dependencies.
     $('-' * 60)
 
 "@ -ForegroundColor Green
-    
+
     ## Show dry run message when -DryRun is passed
     If ( $DryRun ) {
         Write-Host @"
     [ Dry Run Enabled ]
     DryRun is enabled. No actions that would modify the system will occur.
-    
+
     Instead, a message describing what would have happened will print.
     The message will look like:
         '[DryRun] Would have <action> [optional extra info]'
@@ -796,10 +851,34 @@ function main {
     }
 
     Write-Host "`n[ Configure | Starship profile selection ]`n" -ForegroundColor Green
+
+    Write-Debug "`$StarshipProfile=$StarshipProfile"
+    if ( ( $null -eq $StarshipProfile ) -or ( $StarshipProfile -eq "" ) ) {
+        Write-Host "No Starship profile specified with -StarshipProfile parameter.
+Please select one from the list, or hit Enter to use the _default profile.`n" -ForegroundColor Cyan
+
+        try {
+            $SelectedProfile = Select-StarshipProfileFromList
+            Write-Debug "Selected Starship profile: $SelectedProfile"
+        } catch {
+            Write-Error "Failed to select Starship profile. Details: $($_.Exception.Message)"
+            exit 1
+        }
+
+        if ( ( $null -eq $SelectedProfile ) ) {
+            Write-Debug "No profile selected. Using _default profile."
+            $SelectedProfile = "_default"
+        }
+
+        $StarshipProfile = $SelectedProfile
+
+        Write-Host "Using profile: $StarshipProfile" -ForegroundColor Green
+    }
+
     ## Add Starship init to Powershell $PROFILE
     Set-StarshipInPSProfile
 
-    Write-Host "Selecting Starship profile from configs directory" -ForegroundColor Cyan
+    Write-Host "Selecting Starship profile '$StarshipProfile' from configs directory" -ForegroundColor Cyan
     ## Set path to Starship TOML profile
     $StarshipProfile = Select-StarshipProfile -StarshipTomlFile $StarshipTomlFile
     Write-Host "Selected Starship profile: $StarshipProfile" -ForegroundColor Green
