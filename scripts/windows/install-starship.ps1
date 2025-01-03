@@ -29,7 +29,10 @@ Overwrite the Starship config file if it already exists.
 Print available profiles and exit.
 
 .PARAMETER SwitchProfile
-Switch to the specified Starship profile.
+Switch to the specified Starship profile. Skips all installations & prompts user for profile name instead
+
+.PARAMETER Help
+Print help menu
 
 .EXAMPLE
 .\install-starship.ps1 -DryRun -Debug -PkgInstaller scoop
@@ -40,10 +43,11 @@ Param(
     [switch]$DryRun,
     [switch]$Overwrite,
     [string]$PkgInstaller = "winget",
-    [string]$StarshipProfile = $null,
+    [string]$StarshipProfile = "_default",
     [string]$NerdFont = "FiraMono",
     [switch]$ShowProfiles,
-    [switch]$SwitchProfile
+    [switch]$SwitchProfile,
+    [switch]$Help
 )
 
 ## Enable debug logging if -Debug is passed
@@ -135,6 +139,26 @@ if ( $Debug ) {
 #############
 # Functions #
 #############
+
+function Show-Help() {
+    Write-Host "`n`t[ Starship Installer | Help ]`n" -ForegroundColor Green
+    
+    Write-Host "[ Usage ]" -ForegroundColor Cyan
+    Write-Host "$ .\install-starship.ps1" -NoNewline ; Write-Host " [options]`n" -ForegroundColor Magenta
+
+    Write-Host "[Options]" -ForegroundColor Magenta
+    Write-Host "-Debug" -ForegroundColor Magenta -NoNewline ; Write-Host ": Enable debug logging."
+    Write-Host "-DryRun" -ForegroundColor Magenta -NoNewline ; Write-Host " Simulate the script and print the commands that would be executed."
+    Write-Host "-Verbose" -ForegroundColor Magenta -NoNewline ; Write-Host " Enable verbose logging."
+    Write-Host "-Overwrite" -ForegroundColor Magenta -NoNewline ; Write-Host " Overwrite the Starship config file if it already exists."
+    Write-Host "-ShowProfiles" -ForegroundColor Magenta -NoNewline ; Write-Host " Print available profiles and exit."
+    Write-Host "-SwitchProfile" -ForegroundColor Magenta -NoNewline ; Write-Host " Switch to a different Starship profile."
+
+    Write-Host "`n[ Examples ]" -ForegroundColor DarkYellow
+    Write-Host "$ .\install-starship.ps1" -ForegroundColor Yellow -NoNewline ; Write-Host " -DryRun -Debug" -ForegroundColor Magenta -NoNewline ; Write-Host "  # Print commands that would have been executed, with debug logging enabled" -ForegroundColor DarkGreen
+    Write-Host "$ .\install-starship.ps1" -ForegroundColor Yellow  -NoNewline ; Write-Host " -ShowProfiles" -ForegroundColor Magenta -NoNewline ; Write-Host "  # Print available profiles" -ForegroundColor DarkGreen
+    Write-Host "$ .\install-starship.ps1" -ForegroundColor Yellow -NoNewline ; Write-Host " -SwitchProfile -StarshipProfile" -ForegroundColor Magenta -NoNewline ; Write-Host " minimal" -ForegroundColor Blue -NoNewline ; Write-Host "  # Will use the ./configs/minimal.toml file" -ForegroundColor DarkGreen
+}
 
 Function Test-IsAdministrator {
     <#
@@ -832,6 +856,12 @@ Please select one from the list, or hit Enter to use the _default profile.`n" -F
 ##############
 
 function main {
+    ## If -Help detected, skip execution & print help menu
+    If ( $Help ) {
+        Write-Debug "-Help parameter detected, show help & exit"
+        Show-Help
+        exit 0
+    }
 
     ## If -ShowProfiles detected, skip execution and just print profiles
     If ( $ShowProfiles ) {
