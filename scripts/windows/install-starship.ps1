@@ -4,7 +4,7 @@ Install & configure the Starship shell.
 https://starship.rs
 
 .DESCRIPTION
-...
+Install & configure Starship & its dependencies. Installs the FiraCode NerdFont by default.
 
 .PARAMETER Debug
 Enable debug logging.
@@ -69,6 +69,9 @@ Write-Verbose "Starship configs path: $($StarshipRepoConfigDir)"
 $StarshipTomlFile = "$($DotConfigDir)\starship.toml"
 Write-Verbose "Starship config path: $($StarshipTomlFile) [exists: $( Test-Path -Path $StarshipTomlFile )]"
 
+## Valid package managers
+$ValidPackageManagers = @("winget", "choco", "scoop")
+
 #############
 # Functions #
 #############
@@ -108,6 +111,60 @@ function Test-CommandExists {
     return $CmdExists
 }
 
+function Test-ValidPackageManager() {
+    Param(
+        [Parameter(Mandatory = $true)]
+        $PkgManager
+    )
+    
+    ## Return $True/$False if $PkgManager is in $ValidPackageManagers
+    return $ValidPackageManagers -contains $PkgManager
+}
+
+function Test-ScoopPackageExists() {
+    <#
+    .SYNOPSIS
+    Check if a Scoop package exists.
+
+    .PARAMETER PackageName
+    The name of the package to check.
+
+    .EXAMPLE
+    Test-ScoopPackageExists -PackageName "starship"
+    #>
+    Param(
+        [Parameter(Mandatory = $true)]
+        [string]$PackageName
+    )
+    if (scoop list | Select-String -Pattern "$PackageName") {
+        Write-Host "Scoop package '$PackageName' is installed."
+    } else {
+        Write-Host "Scoop package '$PackageName' is not installed."
+    }
+}
+
+function Test-ChocoPackageExists() {
+    <#
+    .SYNOPSIS
+    Check if a Chocolatey package exists.
+
+    .PARAMETER PackageName
+    The name of the package to check.
+
+    .EXAMPLE
+    Test-ChocoPackageExists -PackageName "starship"
+    #>
+    Param(
+        [Parameter(Mandatory = $true)]
+        [string]$PackageName
+    )
+    if (choco list --local-only | Select-String -Pattern "$PackageName") {
+        Write-Host "Chocolatey package '$PackageName' is installed."
+    } else {
+        Write-Host "Chocolatey package '$PackageName' is not installed."
+    }
+}
+
 function Invoke-ElevatedCommand {
     param (
         [string]$Command
@@ -133,123 +190,6 @@ function Invoke-ElevatedCommand {
         # If already running as admin, execute the command
         Invoke-Expression $command
         return $false  # Indicate that the command was run without elevation
-    }
-}
-
-function Install-StarshipScoop {
-    <#
-    .SYNOPSIS
-    Install Starship with Scoop.
-    https://scoop.sh
-    #>
-
-    If ( $DryRun ) {
-        Write-Host "[DryRun] Would have installed Starship with Scoop." -ForegroundColor Magenta
-        return
-    }
-
-    If ( -Not (Test-CommandExists "scoop") ) {
-        Write-Error "Scoop is not installed."
-        exit 1
-    }
-
-    ## Test if Starship is already installed.
-    $StarshipInstalled = Test-CommandExists "starship"
-    Write-Debug "Starship installed: $StarshipInstalled."
-
-    If ( $StarshipInstalled ) {
-        Write-Host "Starship is already installed." -ForegroundColor Yellow
-        return
-    }
-
-    ## Install Starship with Scoop.
-    Write-Host "Installing Starship with Scoop..." -ForegroundColor Cyan
-
-    try {
-        scoop install starship
-        return
-    }
-    catch {
-        Write-Error "Failed to install Starship with Scoop."
-        return $false
-    }
-}
-
-function Install-StarshipChocolatey {
-    <#
-    .SYNOPSIS
-    Install Starship with Chocolatey.
-    https://chocolatey.org
-    #>
-
-    If ( $DryRun ) {
-        Write-Host "[DryRun] Would have installed Starship with Chocolatey." -ForegroundColor Magenta
-        return
-    }
-
-    If ( -Not (Test-CommandExists "choco") ) {
-        Write-Error "Chocolatey is not installed."
-        exit 1
-    }
-
-    ## Test if Starship is already installed.
-    $StarshipInstalled = Test-CommandExists "starship"
-    Write-Debug "Starship installed: $StarshipInstalled."
-
-    If ( $StarshipInstalled ) {
-        Write-Host "Starship is already installed." -ForegroundColor Yellow
-        return
-    }
-
-    ## Install Starship with Chocolatey.
-    Write-Host "Installing Starship with Chocolatey..." -ForegroundColor Cyan
-
-    try {
-        choco install starship -y
-        return
-    }
-    catch {
-        Write-Error "Failed to install Starship with Chocolatey."
-        return $false
-    }
-}
-
-function Install-StarshipWinget {
-    <#
-    .SYNOPSIS 
-    Install Starship with Winget.
-    https://github.com/microsoft/winget-cli
-    #>
-
-    If ( $DryRun ) {
-        Write-Host "[DryRun] Would have installed Starship with Winget." -ForegroundColor Magenta
-        return
-    }
-
-    If ( -Not (Test-CommandExists "winget") ) {
-        Write-Error "Winget is not installed."
-        exit 1
-    }
-
-    ## Test if Starship is already installed.
-    $StarshipInstalled = Test-CommandExists "starship"
-    Write-Debug "Starship installed: $StarshipInstalled."
-
-    If ( $StarshipInstalled ) {
-        Write-Host "Starship is already installed." -ForegroundColor Yellow
-        return
-    }
-
-    ## Install Starship with Winget.
-    Write-Host "Installing Starship with Winget..." -ForegroundColor Cyan
-
-    try {
-        winget install -e --id Starship.Starship
-        return
-    }
-    catch {
-        Write-Error "Failed to install Starship with Winget."
-        return $false
     }
 }
 
@@ -281,11 +221,130 @@ function Start-StarshipInstall {
         return
     }
 
+    If ( -Not ( Test-CommandExists "$($PkgManager)" ) ) {
+        Write-Error "Package manager '$($PkgManager)' is not installed."
+        exit 1
+    }
+
+    ## Test if Starship is already installed.
+    $StarshipInstalled = Test-CommandExists "starship"
+    Write-Debug "Starship installed: $StarshipInstalled."
+
+    If ( $StarshipInstalled ) {
+        Write-Host "Starship is already installed." -ForegroundColor Cyan
+        return
+    }
+
     Write-Host "Installing Starship with $PkgManager..." -ForegroundColor Cyan
     switch ($PkgInstaller) {
-        "scoop" { Install-StarshipScoop }
-        "choco" { Install-StarshipChocolatey }
-        "winget" { Install-StarshipWinget }
+
+        "scoop" { 
+
+            ## Install Starship with Scoop.
+            try {
+                scoop install starship
+                return
+            }
+            catch {
+                Write-Error "Failed to install Starship with Scoop."
+                return $false
+            }
+        }
+
+        "choco" { 
+            ## Install Starship with Chocolatey.
+            try {
+                choco install starship -y
+                return
+            }
+            catch {
+                Write-Error "Failed to install Starship with Chocolatey."
+                return $false
+            }
+        }
+
+        "winget" { 
+            ## Install Starship with Winget.
+            try {
+                winget install -e --id Starship.Starship
+                return
+            }
+            catch {
+                Write-Error "Failed to install Starship with Winget."
+                return $false
+            }
+        }
+
+        default { Write-Error "Unknown package manager: $PkgInstaller" ; exit 1 }
+    }
+}
+
+function Start-NerdFontInstall() {
+    Param(
+        [Parameter(Mandatory = $true)]
+        [string]$PkgManager,
+        $FontName = "FiraMono-NF"
+    )
+
+    If ( $DryRun ) {
+        Write-Host "[DryRun] Would have installed Starship with $PkgManager." -ForegroundColor Magenta
+        return
+    }
+
+    If ( -Not ( Test-CommandExists "$($PkgManager)" ) ) {
+        Write-Error "Package manager '$($PkgManager)' is not installed."
+        exit 1
+    }
+
+    ## Test if Starship is already installed.
+    $StarshipInstalled = Test-CommandExists "starship"
+    Write-Debug "Starship installed: $StarshipInstalled."
+
+    If ( $StarshipInstalled ) {
+        Write-Host "Starship is already installed." -ForegroundColor Cyan
+        return
+    }
+
+    Write-Host "Installing Starship with $PkgManager..." -ForegroundColor Cyan
+    switch ($PkgInstaller) {
+
+        "scoop" { 
+
+            ## Install Starship with Scoop.
+            try {
+                scoop install starship
+                return
+            }
+            catch {
+                Write-Error "Failed to install Starship with Scoop."
+                return $false
+            }
+        }
+
+        "choco" { 
+            ## Install Starship with Chocolatey.
+            try {
+                choco install starship -y
+                return
+            }
+            catch {
+                Write-Error "Failed to install Starship with Chocolatey."
+                return $false
+            }
+        }
+
+        "winget" { 
+            ## Install Starship with Winget.
+            try {
+                winget install -e --id Starship.Starship
+                return
+            }
+            catch {
+                Write-Error "Failed to install Starship with Winget."
+                return $false
+            }
+        }
+
         default { Write-Error "Unknown package manager: $PkgInstaller" ; exit 1 }
     }
 }
@@ -547,6 +606,11 @@ function main {
                 exit 0
             }
         }
+    }
+
+    If ( -Not ( Test-ValidPackageManager $PkgInstaller) ) {
+        Write-Error "Invalid package manager: '$PkgInstaller'. Must be one of: $ValidPackageManagers"
+        exit 1
     }
 
     Write-Host @"
