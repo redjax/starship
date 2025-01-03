@@ -290,35 +290,6 @@ function Start-StarshipInstall {
     }
 }
 
-function New-StarshipProfileBackup {
-    $BackupPath = "$($DotConfigDir)\starship.toml.bak"
-
-    $StarshipConfigExists = ( Test-Path -Path $StarshipTomlFile )
-
-    If ( $DryRun ) {
-        Write-Host @"
-[DryRun] Existing config backup
-Starship config exists: $($StarshipConfigExists) $( If ( $StarshipConfigExists ) { "| Would have created a backup of existing Starship config at: $BackupPath." })
-
-"@ -ForegroundColor Magenta
-
-        return
-    }
-
-    If ( $StarshipConfigExists ) {
-        Write-Host "Backing up existing Starship config to $($BackupPath)" -ForegroundColor Cyan
-
-        try {
-            Move-Item -Path $StarshipTomlFile -Destination $BackupPath -Force
-
-        }
-        catch {
-            Write-Error "Failed to backup existing Starship config. Details: $($_.Exception.Message)"
-            exit 1
-        }
-    }
-}
-
 function Set-StarshipInPSProfile {
     <#
     .SYNOPSIS
@@ -354,11 +325,14 @@ If ( Get-Command starship ) {
 "@
 
     If ( -Not $ProfileExists ) {
+        ## $PROFILE does not exist, do not try to read
         Write-Warning "The Powershell profile does not exist at path: $PROFILE."
         $ProfileContent = $null
     }
     else {
+        ## $PROFILE exists
         Write-Host "Reading Powershell profile from: $($PROFILE)" -ForegroundColor Cyan
+        
         ## Read $PROFILE contents into variable
         try {
             $ProfileContent = Get-Content -Path $PROFILE -ErrorAction SilentlyContinue
@@ -371,16 +345,19 @@ If ( Get-Command starship ) {
     }
 
     If ( -Not $ProfileExists ) {
+        ## Set $InitLineExists to false because $PROFILE does not exist
         $InitLineExists = $false
         Write-Warning "Could not search `$PROFILE for Starship init line because `$PROFILE does not exist yet."
     }
     else {
-        ## Check for the Starship init line
+        ## Check for the Starship init line in the $PROFILE
         $InitLineExists = $ProfileContent -match "Invoke-Expression\s+\(\&starship\s+init\s+powershell\)"
 
         If ( $null -ne $InitLineExists ) {
+            ## Starship init line is in file
             Write-Host "Starship initialization found in `$PROFILE." -ForegroundColor Cyan
             If ( -Not $DryRun ) {
+                ## Return immediately on DryRun
                 return
             }
         }
@@ -406,6 +383,7 @@ Found Starship init line in `$PROFILE: $InitLineExists $( If ( -Not $InitLineExi
     }
 
     If (-Not (Test-Path -Path $PROFILE)) {
+        ## $PROFILE does not exist, initialize empty $PROFILE
         Write-Warning "PowerShell profile does not exist. Creating a new profile..."
         try {
             New-Item -Path $PROFILE -ItemType File -Force
@@ -417,6 +395,7 @@ Found Starship init line in `$PROFILE: $InitLineExists $( If ( -Not $InitLineExi
     }
 
     If (-Not $InitLineExists) {
+        ## Starship init line does not exist in $PROFILE, add it
         Write-Host "`nAdding Starship initialization to the PowerShell profile..." -ForegroundColor Cyan
         try {
             Add-Content -Path $PROFILE -Value $StarshipInitBlock
@@ -430,29 +409,50 @@ Found Starship init line in `$PROFILE: $InitLineExists $( If ( -Not $InitLineExi
 }
 
 function Select-StarshipProfile {
+    <#
+    .SYNOPSIS
+    Select Starship profile from the configs directory.
+
+    .DESCRIPTION
+    Select a Starship profile .toml file matching the name of the profile passed to the script. If a matching
+    profile is not found, the script will exit.
+
+    .EXAMPLE
+    Select-StarshipProfile -StarshipProfile "minimal"
+    #>
     Param(
         [Parameter(Mandatory = $true)]
         [string]$StarshipTomlFile
     )
 
+    ## Set path to Starship TOML profile
     $StarshipProfilePath = "$($StarshipRepoConfigDir)\$($StarshipProfile).toml"
 
     If ( -Not ( Test-Path -Path $StarshipProfilePath ) ) {
+        ## Starship profile does not exist
         Write-Error "Starship profile does not exist at path: $StarshipProfilePath"
         return $false
     }
 
+    ## Matching Starship profile found, return profile
     return $StarshipProfilePath
 }
 
 function New-StarshipProfileSymlink {
+    <#
+    .SYNOPSIS
+    Create a symlink to the selected Starship profile.
+
+    .DESCRIPTION
+    Create a symlink to the selected Starship profile in the user's home directory.
+
+    .EXAMPLE
+    New-StarshipProfileSymlink -StarshipProfile "minimal"
+    #>
     Param(
         [Parameter(Mandatory = $true)]
         [string]$StarshipProfile
     )
-
-    ## This will be flipped to $true if existing Starship config is a junction and starship.bak exists
-    $DoBackup = $false
 
     If ( $DryRun ) {
         Write-Host "[DryRun] Would have created a symlink to Starship profile: $StarshipProfile" -ForegroundColor Magenta
@@ -473,6 +473,7 @@ function New-StarshipProfileSymlink {
                 else {
                     Write-Host "-Overwrite parameter detected. Removing existing junction to create new one."
                     try {
+                        ## Remove existing junction if it exists and -Overwrite is passed to the script
                         Remove-Item -Path $StarshipTomlFile -Force
                     }
                     catch {
@@ -486,12 +487,13 @@ function New-StarshipProfileSymlink {
                 ## Path is a regular file
                 Write-Warning "Path already exists: $StarshipTomlFile. Moving to $StarshipTomlFile.bak"
                 If (Test-Path "$StarshipTomlFile.bak") {
+                    ## Remove existing starship.toml backup
                     Write-Warning "$StarshipTomlFile.bak already exists. Overwriting backup."
                     Remove-Item "$StarshipTomlFile.bak" -Force
                 }
 
                 try {
-                    Move-Item $StarshipTomlFile "$StarshipTomlFile.bak"
+                    ## Move existing starship.toml file to a backup to starship.toml
                 }
                 catch {
                     Write-Error "Error moving $StarshipTomlFile to $StarshipTomlFile.bak. Details: $($_.Exception.Message)"
@@ -540,6 +542,7 @@ function main {
             Write-Warning "Existing Starship profile detected."
 
             If ( -Not $Overwrite ) {
+                ## If existing starship.toml detected, and -Overwrite was not passed, exit immediately
                 Write-Warning "Script will exit. If you want to continue even when an existing Starship configuration is detected, run the script with -Overwrite."
                 exit 0
             }
@@ -601,6 +604,7 @@ function main {
     $StarshipProfile = Select-StarshipProfile -StarshipTomlFile $StarshipTomlFile
     Write-Host "Selected Starship profile: $StarshipProfile" -ForegroundColor Green
 
+    ## Create Starship profile symlink
     try {
         New-StarshipProfileSymlink -StarshipProfile $StarshipProfile
     }
