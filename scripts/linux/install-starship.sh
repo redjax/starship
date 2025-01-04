@@ -48,6 +48,27 @@ function backup_starship_file() {
     fi
 }
 
+function show_profiles() {
+    ## Function to recursively find all .toml files in $REPO_ROOT/configs
+    #  and display them without the .toml extension
+
+    local profiles_path="$REPO_ROOT/configs"
+
+    ## Ensure $profiles_path exists
+    if [[ ! -d "$profiles_path" ]]; then
+        echo "[ERROR] Configs directory not found at $profiles_path"
+        return 1
+    fi
+
+    ## Find all .toml files in the directory and subdirectories
+    echo "Available profiles:"
+    find "$profiles_path" -type f -name "*.toml" | while read -r file; do
+        ## Remove the directory path and the .toml extension
+        profile_name=$(basename "$file" .toml)
+        echo " - $profile_name"
+    done
+}
+
 function install_nerdfont() {
     local FONT_NAME=${1:-$NERDFONT}
     ## echo "[DEBUG] NerdFont name: $FONT_NAME"
@@ -222,4 +243,6 @@ function main() {
 }
 
 ## Run the main function
-main
+# main
+
+show_profiles
