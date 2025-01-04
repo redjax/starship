@@ -621,10 +621,10 @@ If ( Get-Command starship ) {
         ## Check for the Starship init line in the $PROFILE
         $InitLineExists = $ProfileContent -match "Invoke-Expression\s+\(\&starship\s+init\s+powershell\)"
 
-        If ( $null -ne $InitLineExists ) {
+        If ( $InitLineExists ) {
             ## Starship init line is in file
             Write-Host "Starship initialization found in `$PROFILE." -ForegroundColor Cyan
-            If ( -Not $DryRun ) {
+            If ( $DryRun ) {
                 ## Return immediately on DryRun
                 return
             }
@@ -803,7 +803,9 @@ function Switch-StarshipProfile() {
         [string]$StarshipProfile = $StarshipProfile
     )
 
-    Write-Debug "-SwitchProfile parameter detected, skipping execution & just switching profile"
+    If ( $SwitchProfile ) { 
+        Write-Debug "-SwitchProfile parameter detected, skipping execution & just switching profile"
+    }
 
     Write-Debug "`$StarshipProfile=$StarshipProfile"
     if ( ( $null -eq $StarshipProfile ) -or ( $StarshipProfile -eq "" ) ) {
