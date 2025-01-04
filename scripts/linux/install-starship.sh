@@ -8,8 +8,12 @@
 CWD=$(pwd)
 THIS_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 REPO_ROOT=$( cd $CWD && pwd )
+# echo "[DEBUG] Script dir: $THIS_DIR"
+# echo "[DEBUG] Repository root: $REPO_ROOT"
 
-echo "[DEBUG] Script dir: $THIS_DIR"
+NERDFONT="FiraMono"
+NERDFONT_DOWNLOAD_URL_BASE="https://github.com/ryanoasis/nerd-fonts/releases/latest/download"
+# echo "[DEBUG] NerdFont download URL base: $NERDFONT_DOWNLOAD_URL"
 
 function check_installed() {
     if ! command -v "$1" >/dev/null 2>&1; then
@@ -41,6 +45,51 @@ function backup_starship_file() {
         echo "Removing symlink ~/.config/starship.toml"
         rm "$HOME/.config/starship.toml"
     fi
+}
+
+function install_nerdfont() {
+    local FONT_NAME=${1:-$NERDFONT}
+    echo "[DEBUG] NerdFont name: $FONT_NAME"
+    local FONT_DOWNLOAD_URL="$NERDFONT_DOWNLOAD_URL_BASE/$FONT_NAME.zip"
+    echo "[DEBUG] NerdFont download URL: $FONT_DOWNLOAD_URL"
+    local TEMP_DIR=$(mktemp -d)
+    echo "[DEBUG] Temporary directory: $TEMP_DIR"
+    local FONT_DIR="$HOME/.local/share/fonts"
+    echo "[DEBUG] Fonts directory: $FONT_DIR"
+    local EXTRACT_DIR="$FONT_DIR/$FONT_NAME"
+    echo "[DEBUG] Font extraction path: $EXTRACT_DIR"
+
+    if [[ -d "$EXTRACT_DIR" ]]; then
+        echo "NerdFont '$FONT_NAME' is already installed."
+        return
+    fi
+
+    echo "Downloading NerdFont: $FONT_NAME"
+    curl -Lo "$TEMP_DIR/$FONT_NAME.zip" "$FONT_DOWNLOAD_URL"
+    if [[ $? -ne 0 ]]; then
+        echo "Error downloading NerdFont: $FONT_NAME"
+        exit 1
+    fi
+    echo "NerdFont downloaded successfully."
+
+    ZIP_INSTALLED=$(check_installed "unzip")
+    if [[ $ZIP_INSTALLED -ne 0 ]]; then
+        echo "[ERROR] zip/unzip utility is not installed. Cannot extract NerdFont."
+        exit 1
+    fi
+
+    if [[ ! -d "$EXTRACT_DIR" ]]; then
+        echo "[WARNING] Font extraction path '$EXTRACT_DIR' does not exist. Creating it."
+        mkdir -p "$EXTRACT_DIR"
+    fi
+
+    echo "Extracting NerdFont: $FONT_NAME"
+    unzip "$TEMP_DIR/$FONT_NAME.zip" -d "$EXTRACT_DIR"
+    if [[ $? -ne 0 ]]; then
+        echo "Error extracting NerdFont: $FONT_NAME"
+        exit 1
+    fi
+    echo "NerdFont extracted successfully."
 }
 
 function install_starship() {
@@ -75,7 +124,6 @@ function create_symlink() {
     STARSHIP_PROFILE=${1:-"_default"}
 
     echo "[DEBUG] Config path: $config_path"
-    echo "[DEBUG] Repository root: $REPO_ROOT"
 
     ## Ensure $REPO_ROOT is set
     if [[ -z "$REPO_ROOT" ]]; then
@@ -110,6 +158,8 @@ function create_symlink() {
 
 function main() {
     ## Main function that calls the above functions in order
+
+    install_nerdfont
 
     ## Check if Starship is installed, store response code in variable
     check_installed "starship"
